@@ -201,25 +201,25 @@ func (lfm *LFM) showShape(gradient_p, l2_p, pVal, qVal *mat.VecDense) {
 	l2_p_r, l2_p_c := l2_p.Caps() //shape 5,1
 	fmt.Println("l2_p shape ", l2_p_r, l2_p_c)
 }
-func (lfm *LFM) _optimize(userIndex, itemIndex, e float64) {
+func (lfm *LFM) _optimize(userIndex, itemIndex, costError float64) {
 	pVal := lfm.ModelPfactor.RowView(int(userIndex)).(*mat.VecDense)
 	qVal := lfm.ModelQfactor.RowView(int(itemIndex)).(*mat.VecDense)
 	var gradient_p, l2_p, grad_l2_p, delta_p, gradient_q, l2_q, grad_l2_q, delta_q, np_val, nq_val mat.VecDense
-	gradient_p.ScaleVec(-e, qVal)
+	gradient_p.ScaleVec(-costError, qVal)
 	l2_p.ScaleVec(lfm.lam, pVal)
 	grad_l2_p.AddVec(&gradient_p, &l2_p)
 	delta_p.ScaleVec(lfm.lr, &grad_l2_p)
-	gradient_q.ScaleVec(-e, pVal)
+	np_val.SubVec(pVal, &delta_p)
+	gradient_q.ScaleVec(-costError, pVal)
 	l2_q.ScaleVec(lfm.lam, qVal)
 	grad_l2_q.AddVec(&gradient_q, &l2_q)
 	delta_q.ScaleVec(lfm.lr, &grad_l2_q)
-	np_val.SubVec(pVal, &delta_p)
 	nq_val.SubVec(qVal, &delta_q)
-	lfm.ModelPfactor.SetRow(int(userIndex), vectofloat(&np_val))
-	lfm.ModelQfactor.SetRow(int(itemIndex), vectofloat(&nq_val))
+	lfm.ModelPfactor.SetRow(int(userIndex), VectorConvertFloatArray(&np_val))
+	lfm.ModelQfactor.SetRow(int(itemIndex), VectorConvertFloatArray(&nq_val))
 }
 
-func vectofloat(vec mat.Vector) []float64 {
+func VectorConvertFloatArray(vec mat.Vector) []float64 {
 	vecArr := make([]float64, 0)
 	newVec := vec.(*mat.VecDense)
 	vecLen := newVec.Len()
