@@ -43,20 +43,6 @@ type LFM struct {
 
 //5 5 0.02 0.01 "userId" "itemId"
 func NewDefaultLFM(ratingPath string, classCount, iterCount int, lr, lam float64, featureName, labelName string, csvOp imports.CSVLoadOptions) *LFM {
-	//csvOp := imports.CSVLoadOptions{
-	//	Comma:   ',',
-	//	Comment: 0,
-	//	DictateDataType: map[string]interface{}{
-	//		//"UserID":    float64(0),
-	//		//"MovieID":   float64(0),
-	//		//"Rating":    float64(0),
-	//		//"Timestamp": float64(0),
-	//		featureNameArr[0]: float64(0),
-	//		featureNameArr[1]: float64(0),
-	//		featureNameArr[2]: float64(0),
-	//		featureNameArr[3]: float64(0),
-	//	},
-	//}
 	userItemRatingMatrix, ratingDf := LoadData(ratingPath, csvOp)
 	userIdItemIdDict := make(map[float64]map[float64]float64)
 	userIndexItemIndexDict := make(map[float64]map[float64]float64)
@@ -421,4 +407,22 @@ func LoadModel(loadPath string) *LFM {
 	var lfmnew *LFM
 	memdump.Decode(r, &lfmnew)
 	return lfmnew
+}
+
+func GenerateCsvOptions(featureNameArr []string) imports.CSVLoadOptions {
+	csvOp := imports.CSVLoadOptions{
+		Comma:   ',',
+		Comment: 0,
+		DictateDataType: map[string]interface{}{
+			//"UserID":    float64(0),
+			//"MovieID":   float64(0),
+			//"Rating":    float64(0),
+			//"Timestamp": float64(0),
+			featureNameArr[0]: float64(0),
+			featureNameArr[1]: float64(0),
+			featureNameArr[2]: float64(0),
+			featureNameArr[3]: float64(0),
+		},
+	}
+	return csvOp
 }
