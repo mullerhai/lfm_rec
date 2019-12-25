@@ -42,8 +42,22 @@ type LFM struct {
 }
 
 //5 5 0.02 0.01 "userId" "itemId"
-func NewDefaultLFM(ratingPath string, classCount, iterCount int, lr, lam float64, featureName, labelName string, featureArray []string) *LFM {
-	userItemRatingMatrix, ratingDf := LoadData(ratingPath, featureArray)
+func NewDefaultLFM(ratingPath string, classCount, iterCount int, lr, lam float64, featureName, labelName string, csvOp imports.CSVLoadOptions) *LFM {
+	//csvOp := imports.CSVLoadOptions{
+	//	Comma:   ',',
+	//	Comment: 0,
+	//	DictateDataType: map[string]interface{}{
+	//		//"UserID":    float64(0),
+	//		//"MovieID":   float64(0),
+	//		//"Rating":    float64(0),
+	//		//"Timestamp": float64(0),
+	//		featureNameArr[0]: float64(0),
+	//		featureNameArr[1]: float64(0),
+	//		featureNameArr[2]: float64(0),
+	//		featureNameArr[3]: float64(0),
+	//	},
+	//}
+	userItemRatingMatrix, ratingDf := LoadData(ratingPath, csvOp)
 	userIdItemIdDict := make(map[float64]map[float64]float64)
 	userIndexItemIndexDict := make(map[float64]map[float64]float64)
 	lfm := &LFM{classCount, iterCount, featureName, labelName, lr, lam, userItemRatingMatrix, nil, nil, ratingDf, userIdItemIdDict, nil, nil, nil, userIndexItemIndexDict}
@@ -97,23 +111,9 @@ func (lfm *LFM) generateUserIdItemIdIndexDict() {
 
 }
 
-func LoadData(ratingPath string, featureNameArr []string) (*mat.Dense, *dataframe.DataFrame) {
+func LoadData(ratingPath string, csvOp imports.CSVLoadOptions) (*mat.Dense, *dataframe.DataFrame) {
 	var ctx = context.Background()
 	file, err := os.Open(ratingPath)
-	csvOp := imports.CSVLoadOptions{
-		Comma:   ',',
-		Comment: 0,
-		DictateDataType: map[string]interface{}{
-			//"UserID":    float64(0),
-			//"MovieID":   float64(0),
-			//"Rating":    float64(0),
-			//"Timestamp": float64(0),
-			featureNameArr[0]: float64(0),
-			featureNameArr[1]: float64(0),
-			featureNameArr[2]: float64(0),
-			featureNameArr[3]: float64(0),
-		},
-	}
 	fmt.Println(csvOp)
 	ratingDf, err := imports.LoadFromCSV(ctx, file, csvOp)
 	if err != nil {
