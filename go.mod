@@ -24,6 +24,7 @@ require (
 	github.com/rocketlaunchr/dataframe-go v0.0.0-20190730093426-49836babd1b8
 	github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5
 	golang.org/x/crypto v0.0.0-20191206172530-e9b2fee46413 // indirect
+	golang.org/x/exp v0.0.0-20190125153040-c74c464bbbf2
 	golang.org/x/net v0.0.0-20191209160850-c0dbc17a3553
 	golang.org/x/sys v0.0.0-20191210023423-ac6580df4449 // indirect
 	gonum.org/v1/gonum v0.6.1

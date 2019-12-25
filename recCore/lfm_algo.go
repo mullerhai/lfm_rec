@@ -1,4 +1,4 @@
-package main
+package recCore
 
 import (
 	"context"
@@ -15,18 +15,22 @@ import (
 	"sort"
 )
 
-func main() {
-	ratingPath := "./recCore/ratings.csv"
-	lfm := NewDefaultLFM(ratingPath)
-	lfm.initModel()
-	lfm.Train()
-	userId := 23.0
-	var topN int32 = 10
-	var itemScore = lfm.Predict(userId, topN)
-	for _, itemScoreEle := range itemScore {
-		fmt.Println("item : %f ,score : %f ", itemScoreEle.Key, itemScoreEle.Value)
-	}
-}
+//func main() {
+//	ratingPath := "./recCore/ratings.csv"
+//	lfm := NewDefaultLFM(ratingPath)
+//	lfm.InitModel()
+//	lfm.Train()
+//	userId := 23.0
+//	var topN int32 = 10
+//	var itemScore = lfm.Predict(userId, topN)
+//	for index, itemScoreEle := range itemScore {
+//		itemId := float64(itemScoreEle.Key)
+//		fmt.Println("item : %f ,score : %f ", itemId, itemScoreEle.Value)
+//		if index == int(topN)*50 {
+//			break
+//		}
+//	}
+//}
 
 type IdsMapping struct {
 	userIdIndexDict map[float64]float64
@@ -34,14 +38,15 @@ type IdsMapping struct {
 	itemIdIndexDict map[float64]float64
 	indexItemIdDict map[float64]float64
 }
+
 type LFM struct {
-	class_count            int
-	iter_count             int
+	classCount             int
+	iterCount              int
 	featureName            string
 	labelName              string
 	lr                     float64
 	lam                    float64
-	raw_data               *mat.Dense
+	userItemRatingMatrix   *mat.Dense
 	modelPfactor           *mat.Dense
 	modelQfactor           *mat.Dense
 	ratingDf               *dataframe.DataFrame
@@ -53,10 +58,10 @@ type LFM struct {
 }
 
 func NewDefaultLFM(ratingPath string) *LFM {
-	denseArr, ratingDf := loadData(ratingPath)
-	useridItemidDict := make(map[float64]map[float64]float64)
+	userItemRatingMatrix, ratingDf := loadData(ratingPath)
+	userIdItemIdDict := make(map[float64]map[float64]float64)
 	userIndexItemIndexDict := make(map[float64]map[float64]float64)
-	lfm := &LFM{5, 5, "userId", "itemId", 0.02, 0.01, denseArr, nil, nil, ratingDf, useridItemidDict, nil, nil, nil, userIndexItemIndexDict}
+	lfm := &LFM{5, 5, "userId", "itemId", 0.02, 0.01, userItemRatingMatrix, nil, nil, ratingDf, userIdItemIdDict, nil, nil, nil, userIndexItemIndexDict}
 	return lfm
 }
 
@@ -106,6 +111,7 @@ func (lfm *LFM) generateUserIdItemIdIndexDict() {
 	fmt.Println("lfm dict len ", len(lfm.useridItemidDict))
 
 }
+
 func loadData(ratingPath string) (*mat.Dense, *dataframe.DataFrame) {
 	var ctx = context.Background()
 	file, err := os.Open(ratingPath)
@@ -129,22 +135,23 @@ func loadData(ratingPath string) (*mat.Dense, *dataframe.DataFrame) {
 	matrixRow := ratingDf.Series[0].NRows()
 	matrixCol := len(ratingDf.Names())
 	denseArr := mat.NewDense(matrixRow, matrixCol, float64Arr)
+
 	return denseArr, ratingDf
 }
 
-func (lfm *LFM) initModel() {
+func (lfm *LFM) InitModel() {
 	src := rand.New(rand.NewSource(1))
 	var uni = distuv.Uniform{0, 0.35, src}
 	pDistinctEle := distinctSeriesConvertSet(lfm.ratingDf.Series[0])
 	qDistinctEle := distinctSeriesConvertSet(lfm.ratingDf.Series[1])
-	pClasslen := lfm.class_count * pDistinctEle.Size()
-	qClasslen := lfm.class_count * qDistinctEle.Size()
+	pClasslen := lfm.classCount * pDistinctEle.Size()
+	qClasslen := lfm.classCount * qDistinctEle.Size()
 	pData := GenerateUniformArr(uni, int64(pClasslen))
 	qData := GenerateUniformArr(uni, int64(qClasslen))
 	lfm.itemidSet = &qDistinctEle
 	lfm.useridSet = &pDistinctEle
-	lfm.modelPfactor = mat.NewDense(pDistinctEle.Size(), lfm.class_count, pData)
-	lfm.modelQfactor = mat.NewDense(qDistinctEle.Size(), lfm.class_count, qData)
+	lfm.modelPfactor = mat.NewDense(pDistinctEle.Size(), lfm.classCount, pData)
+	lfm.modelQfactor = mat.NewDense(qDistinctEle.Size(), lfm.classCount, qData)
 	lfm.generateIdsMatrixIndexMapping()
 	lfm.generateUserIdItemIdIndexDict()
 
@@ -176,6 +183,7 @@ func (lfm *LFM) generateIdsMatrixIndexMapping() {
 	idMapping := &IdsMapping{UserIdIndexDict, IndexUserIdDict, ItemIdIndexDict, indexItemIdDict}
 	lfm.idsMapping = idMapping
 }
+
 func distinctSeriesConvertSet(series dataframe.Series) gset.Set {
 	seriesArr := series.(*dataframe.SeriesFloat64).Values
 	var newSet = gset.New(true)
@@ -185,31 +193,32 @@ func distinctSeriesConvertSet(series dataframe.Series) gset.Set {
 	return *newSet
 }
 
-func (lfm *LFM) _preidct(userId, itemId float64) float64 {
+func (lfm *LFM) _preidct(userId, itemId float64) (float64, float64) {
 	p := lfm.modelPfactor.RowView(int(userId)).(*mat.VecDense)     //5,1
 	q := lfm.modelQfactor.RowView(int(itemId)).(*mat.VecDense).T() // 1.5
 	var res mat.Dense
 	res.Mul(p, q) //5,5
-	res_r, res_c := res.Caps()
-	fmt.Println("predict res shape ", res_r, res_c)
-	r := mat.Sum(&res)
-	logit := 1.0 / (1 + math.Exp(-r))
-	return logit
+	resRow, resCol := res.Caps()
+	matR := mat.Sum(&res)
+	logit := 1.0 / (1.0 + math.Exp(-matR))
+	fmt.Println("predict res shape  matR  logit ", resRow, resCol, matR, logit)
+	return logit, matR
 }
 
-func (lfm *LFM) _loss(user_id, item_id, y float64, step int) float64 {
-	cost_error := y - lfm._preidct(user_id, item_id)
-	fmt.Println("step : {} ,cost error : {} ", step, cost_error)
-	return cost_error
+func (lfm *LFM) _loss(userIndex, itemIndex, rating float64, step int) float64 {
+	logit, matR := lfm._preidct(userIndex, itemIndex)
+	costError := rating - matR
+	fmt.Println("step : {} ,cost error : {}, logit  y  ", step, costError, logit, rating)
+	return costError
 }
 
-func (lfm *LFM) _optimize(user_id, item_id, e float64) {
+func (lfm *LFM) _optimize(userIndex, itemIndex, e float64) {
 	modp_r, modp_c := lfm.modelPfactor.Caps()
 	fmt.Println("modelPfactor shape  ", modp_r, modp_c)
 	modq_r, modq_c := lfm.modelQfactor.Caps()
 	fmt.Println("modelqfactor sh ape  ", modq_r, modq_c)
-	pVal := lfm.modelPfactor.RowView(int(user_id)).(*mat.VecDense)
-	qVal := lfm.modelQfactor.RowView(int(item_id)).(*mat.VecDense)
+	pVal := lfm.modelPfactor.RowView(int(userIndex)).(*mat.VecDense)
+	qVal := lfm.modelQfactor.RowView(int(itemIndex)).(*mat.VecDense)
 	var gradient_p, l2_p, grad_l2_p, delta_p, gradient_q, l2_q, grad_l2_q, delta_q, np_val, nq_val mat.VecDense
 	gradient_p.ScaleVec(-e, qVal)
 	g_r, g_c := gradient_p.Caps()
@@ -229,8 +238,8 @@ func (lfm *LFM) _optimize(user_id, item_id, e float64) {
 	delta_q.ScaleVec(lfm.lr, &grad_l2_q)
 	np_val.SubVec(pVal, &delta_p)
 	nq_val.SubVec(qVal, &delta_q)
-	lfm.modelPfactor.SetRow(int(user_id), vectofloat(&np_val))
-	lfm.modelQfactor.SetRow(int(item_id), vectofloat(&nq_val))
+	lfm.modelPfactor.SetRow(int(userIndex), vectofloat(&np_val))
+	lfm.modelQfactor.SetRow(int(itemIndex), vectofloat(&nq_val))
 }
 
 func vectofloat(vec mat.Vector) []float64 {
@@ -243,9 +252,10 @@ func vectofloat(vec mat.Vector) []float64 {
 	}
 	return vecArr
 }
+
 func (lfm *LFM) Train() {
-	fmt.Println("lfm training ", lfm.iter_count)
-	for step := 0; step < lfm.iter_count; step++ {
+	fmt.Println("lfm training ", lfm.iterCount)
+	for step := 0; step < lfm.iterCount; step++ {
 		fmt.Println(" lfm step ", step)
 		for userIdIndex, valDict := range lfm.userIndexItemIndexDict {
 			itemIdIndexs := reflect.ValueOf(valDict).MapKeys()
@@ -258,23 +268,31 @@ func (lfm *LFM) Train() {
 		}
 		lfm.lr *= 0.9
 	}
+	fmt.Println("model training complete !!!!")
 }
 
-func (lfm *LFM) Predict(userId float64, topN int32) PairList {
-	labelSet := gset.New(true)
-	labelArr := dfWhere(lfm.ratingDf, lfm.featureName, lfm.labelName, userId)
-	labelInterfaceArr := floatArrConvertInterfaceArr(labelArr)
-	labelSet.Add(labelInterfaceArr...)
-	itemIndex, _ := lfm.ratingDf.NameToColumn(lfm.labelName)
+func (lfm *LFM) fromSeriesGenerateGSet(fieldName string) *gset.Set {
+	itemIndex, _ := lfm.ratingDf.NameToColumn(fieldName)
 	itemIds := lfm.ratingDf.Series[itemIndex].(*dataframe.SeriesFloat64).Values
 	itemIdsInterfaceArr := floatArrConvertInterfaceArr(itemIds)
 	itemIdsSet := gset.New(true)
 	itemIdsSet.Add(itemIdsInterfaceArr...)
-	otherItemIds := itemIdsSet.Diff(labelSet)
-	fmt.Println("otherItemIds  size : ", otherItemIds.Size())
+	return itemIdsSet
+}
+
+func (lfm *LFM) Predict(userId float64, topN int32) PairList {
+	fmt.Println("now predict userid ", userId)
+	labelSet := gset.New(true)
+	labelArr := dfWhere(lfm.ratingDf, lfm.featureName, lfm.labelName, userId)
+	labelInterfaceArr := floatArrConvertInterfaceArr(labelArr)
+	labelSet.Add(labelInterfaceArr...)
+	otherItemIds := lfm.itemidSet.Diff(labelSet)
+	fmt.Println("otherItemIds  size :  label set size  ", otherItemIds.Size(), labelSet.Size())
 	interestScoreDict := make(map[float64]float64, 0)
+	userIndex := lfm.idsMapping.userIdIndexDict[userId]
 	for _, itemId := range otherItemIds.Slice() {
-		score := lfm._preidct(userId, itemId.(float64))
+		itemIndex := lfm.idsMapping.itemIdIndexDict[itemId.(float64)]
+		_, score := lfm._preidct(userIndex, itemIndex)
 		interestScoreDict[itemId.(float64)] = score
 	}
 	rankList := RankSortDict(interestScoreDict)
@@ -285,11 +303,13 @@ type Pair struct {
 	Key   float64
 	Value float64
 }
+
 type PairList []Pair
 
 func (p PairList) Len() int           { return len(p) }
 func (p PairList) Less(i, j int) bool { return p[i].Value < p[j].Value }
 func (p PairList) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+
 func RankSortDict(dict map[float64]float64) PairList {
 	pl := make(PairList, len(dict))
 	i := 0
@@ -308,6 +328,7 @@ func floatArrConvertInterfaceArr(labelArr []float64) []interface{} {
 	}
 	return labelInterfaceArr
 }
+
 func dfWhere(df *dataframe.DataFrame, feature, label string, featureVal float64) []float64 {
 	lableIndex, _ := df.NameToColumn(label)
 	featureIndex, _ := df.NameToColumn(feature)
@@ -322,6 +343,15 @@ func dfWhere(df *dataframe.DataFrame, feature, label string, featureVal float64)
 	}
 	return labelArr
 }
+
+func (lfm *LFM) dataFrameConvertDenseMatrix(df *dataframe.DataFrame) *mat.Dense {
+	dataArr := seriesConvertFloatarray(df)
+	matrixRow := df.NRows()
+	matrixCol := len(df.Names())
+	userItemRatingMatrix := mat.NewDense(matrixRow, matrixCol, dataArr)
+	return userItemRatingMatrix
+}
+
 func seriesConvertFloatarray(df *dataframe.DataFrame) []float64 {
 	series := df.Series
 	arr := make([]float64, 0)
@@ -339,8 +369,31 @@ func GenerateUniformArr(uni distuv.Uniform, arrLen int64) []float64 {
 	fmt.Println(x)
 	return x
 }
+
 func generateSample(x []float64, r distuv.Rander) {
 	for i := range x {
 		x[i] = r.Rand()
 	}
 }
+
+//func (lfm *LFM)evaluateLFMModel(selectCount int )float64{
+//	rmae := float64(0)
+//
+//	return rmae
+//}
+//
+//func (LFM *LFM) saveModel(savePath string){
+//
+//}
+//
+//func loadModel(loadPath string) *LFM{
+//
+//}
+//
+//func (lfm *LFM)similarItemRecommend(itemId float64)PairList{
+//
+//}
+//
+//func (lfm *LFM)rankSelectItemRecommend(item float64,selectItemSet gset.Set)PairList{
+//
+//}
