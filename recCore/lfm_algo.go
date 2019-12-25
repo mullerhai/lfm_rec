@@ -201,24 +201,26 @@ func (lfm *LFM) _loss(userIndex, itemIndex, rating float64) float64 {
 	return costError
 }
 
+func (lfm *LFM) showShape(gradient_p, l2_p, pVal, qVal *mat.VecDense) {
+	modp_r, modp_c := lfm.ModelPfactor.Caps()
+	fmt.Println("ModelPfactor shape  ", modp_r, modp_c)
+	modq_r, modq_c := lfm.ModelQfactor.Caps()
+	fmt.Println("modelqfactor sh ape  ", modq_r, modq_c)
+	g_r, g_c := gradient_p.Caps()
+	p_r, p_c := pVal.Caps()
+	q_r, q_c := qVal.Caps()
+	fmt.Println("gradient_p shape  ", g_r, g_c)
+	fmt.Println("pval shape ", p_r, p_c)
+	fmt.Println("qval shape ", q_r, q_c)
+	l2_p_r, l2_p_c := l2_p.Caps() //shape 5,1
+	fmt.Println("l2_p shape ", l2_p_r, l2_p_c)
+}
 func (lfm *LFM) _optimize(userIndex, itemIndex, e float64) {
 	pVal := lfm.ModelPfactor.RowView(int(userIndex)).(*mat.VecDense)
 	qVal := lfm.ModelQfactor.RowView(int(itemIndex)).(*mat.VecDense)
 	var gradient_p, l2_p, grad_l2_p, delta_p, gradient_q, l2_q, grad_l2_q, delta_q, np_val, nq_val mat.VecDense
 	gradient_p.ScaleVec(-e, qVal)
 	l2_p.ScaleVec(lfm.lam, pVal)
-	//modp_r, modp_c := lfm.ModelPfactor.Caps()
-	//fmt.Println("ModelPfactor shape  ", modp_r, modp_c)
-	//modq_r, modq_c := lfm.ModelQfactor.Caps()
-	//fmt.Println("modelqfactor sh ape  ", modq_r, modq_c)
-	//g_r, g_c := gradient_p.Caps()
-	//p_r, p_c := pVal.Caps()
-	//q_r, q_c := qVal.Caps()
-	//fmt.Println("gradient_p shape  ", g_r, g_c)
-	//fmt.Println("pval shape ", p_r, p_c)
-	//fmt.Println("qval shape ", q_r, q_c)
-	//l2_p_r, l2_p_c := l2_p.Caps() //shape 5,1
-	//fmt.Println("l2_p shape ", l2_p_r, l2_p_c)
 	grad_l2_p.AddVec(&gradient_p, &l2_p)
 	delta_p.ScaleVec(lfm.lr, &grad_l2_p)
 	gradient_q.ScaleVec(-e, pVal)
@@ -311,7 +313,7 @@ func RankSortDict(dict map[float64]float64, topN int32) PairList {
 	sort.Sort(sort.Reverse(pl))
 	topNRankPair := make(PairList, topN)
 	for index, pair := range pl {
-		fmt.Println("sort pair ", pair.Key, pair.Value)
+		//fmt.Println("sort pair ", pair.Key, pair.Value)
 		topNRankPair[index] = Pair{pair.Key, pair.Value}
 		if int32(index) == topN-1 {
 			break

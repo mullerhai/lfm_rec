@@ -10,7 +10,7 @@ import (
 
 func main() {
 	ratingPath := "./recCore/ratings.csv"
-	var classCount, iterCount int = 5, 5
+	var classCount, iterCount int = 5, 10
 	var lr, lam float64 = 0.01, 0.02
 	var featureName, labelName = "userId", "itemId"
 	var featureNameArr = []string{"UserID", "MovieID", "Rating", "Timestamp"}
