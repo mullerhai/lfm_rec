@@ -4,6 +4,7 @@ go 1.13
 
 require (
 	github.com/afex/hystrix-go v0.0.0-20180502004556-fa1af6a1f4f5 // indirect
+	github.com/alexflint/go-memdump v0.0.0-20160830180315-750db99b78d6
 	github.com/elastic/go-elasticsearch/v7 v7.5.0
 	github.com/go-kit/kit v0.9.0
 	github.com/go-playground/universal-translator v0.17.0 // indirect
